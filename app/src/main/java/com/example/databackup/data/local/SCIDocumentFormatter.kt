@@ -97,9 +97,8 @@ class SCIDocumentFormatter {
 
     private fun applyPageSettings(document: XWPFDocument) {
         val body = document.document.body
-        val sectPr = if (body.sectPr != null) body.sectPr else body.addNewSectPr()
-        var pageSize: CTPageSz? = sectPr.pgSz
-        if (pageSize == null) pageSize = sectPr.addNewPgSz()
+        val sectPr = body.sectPr ?: body.addNewSectPr()
+        val pageSize = sectPr.pgSz ?: sectPr.addNewPgSz()
         if (config.paperSize.uppercase() == "LETTER") {
             pageSize.w = BigInteger.valueOf((216 * 1440 / 25.4).toLong())
             pageSize.h = BigInteger.valueOf((279 * 1440 / 25.4).toLong())
@@ -107,8 +106,7 @@ class SCIDocumentFormatter {
             pageSize.w = PAGE_WIDTH
             pageSize.h = PAGE_HEIGHT
         }
-        var pageMar: CTPageMar? = sectPr.pgMar
-        if (pageMar == null) pageMar = sectPr.addNewPgMar()
+        val pageMar = sectPr.pgMar ?: sectPr.addNewPgMar()
         pageMar.top = MARGIN_ALL
         pageMar.bottom = MARGIN_ALL
         pageMar.left = MARGIN_ALL
@@ -238,8 +236,9 @@ class SCIDocumentFormatter {
     }
 
     private fun setLineSpacing(paragraph: XWPFParagraph, extraBefore: Int = 0, extraAfter: Int = 0) {
-        val pPr = paragraph.ctPr ?: paragraph.ctP.addNewPPr()
-        var spacing: CTSpacing? = pPr.spacing
+        val ctp = paragraph.ctp
+        val pPr = ctp.pPr ?: ctp.addNewPPr()
+        var spacing = pPr.spacing
         if (spacing == null) spacing = pPr.addNewSpacing()
         val lineValue = when (config.lineSpacing) {
             "single" -> BigInteger.valueOf(240)

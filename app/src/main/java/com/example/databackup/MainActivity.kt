@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
 
     /**
      * 文件选择器启动器
-     * 支持选择任意类型文件（*/*），实际项目中可限制为文档类型如 pdf、doc、txt 等
+     * 支持选择任意类型文件（* / *），实际项目中可限制为文档类型如 pdf、doc、txt 等
      */
     private val filePickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()

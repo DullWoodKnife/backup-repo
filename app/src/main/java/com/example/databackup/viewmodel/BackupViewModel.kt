@@ -9,6 +9,7 @@ import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.databackup.data.local.LocalDocumentManager
+import com.example.databackup.BuildConfig
 import com.example.databackup.data.local.SCIDocumentFormatter
 import com.example.databackup.data.repository.BackupRepository
 import com.example.databackup.data.repository.GitHubBackupRepository

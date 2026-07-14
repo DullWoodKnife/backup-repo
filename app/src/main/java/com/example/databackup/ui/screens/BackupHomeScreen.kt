@@ -208,7 +208,7 @@ private fun LocalFormatCard(
             if (needsPermission) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "\u26a0\ufe0f Android 11+ 需开启"所有文件访问权限"",
+                        text = "\u26a0\ufe0f Android 11+ 需开启所有文件访问权限",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.error
                     )
