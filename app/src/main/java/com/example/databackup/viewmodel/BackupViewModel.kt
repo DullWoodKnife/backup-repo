@@ -68,9 +68,62 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
                 _backupStatus.value = BackupStatus.Error("未找到对应备份实现")
                 return
             }
-        _backupStatus.value = BackupStatus.Loading(repository.getRepositoryName())
+        _backupStatus.value = BackupStatus.Loading("${repository.getRepositoryName()} · 预处理")
         viewModelScope.launch {
-            val result = repository.backupFile(getApplication(), uri)
+            val result = withContext(Dispatchers.IO) {
+                val context = getApplication<Application>()
+                val resolver = context.contentResolver
+                val fileName = getFileNameFromUri(uri)
+
+                // 判断是否为 Word 文件，是的话先格式化再上传
+                val isWordFile = fileName.lowercase().endsWith(".docx") ||
+                                 fileName.lowercase().endsWith(".doc")
+
+                if (isWordFile) {
+                    try {
+                        // 将 URI 文件复制到应用缓存目录
+                        val inputStream = resolver.openInputStream(uri)
+                            ?: return@withContext Result.failure<String>(Exception("无法打开文件流"))
+                        val cacheDir = context.cacheDir
+                        val tempFile = File(cacheDir, "sci_format_${System.currentTimeMillis()}_$fileName")
+                        inputStream.use { input ->
+                            tempFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+
+                        // 使用 SCI 格式化器排版
+                        sciFormatter.setConfig(_formatConfig.value)
+                        val formatResult = sciFormatter.formatDocument(tempFile)
+                        if (formatResult.isFailure) {
+                            return@withContext Result.failure<String>(
+                                Exception("SCI 格式化失败: ${formatResult.exceptionOrNull()?.message}")
+                            )
+                        }
+
+                        // 上传格式化后的文件
+                        if (repository is GitHubBackupRepository) {
+                            val uploadResult = repository.uploadFile(tempFile)
+                            // 清理缓存文件
+                            tempFile.delete()
+                            if (uploadResult.isSuccess) {
+                                val formatMsg = formatResult.getOrNull() ?: "格式化完成"
+                                val uploadMsg = uploadResult.getOrNull() ?: "上传完成"
+                                Result.success("$uploadMsg\n\n[SCI 格式化]$formatMsg")
+                            } else {
+                                uploadResult
+                            }
+                        } else {
+                            repository.backupFile(context, Uri.fromFile(tempFile))
+                        }
+                    } catch (e: Exception) {
+                        Result.failure<String>(e)
+                    }
+                } else {
+                    // 非 Word 文件，直接上传
+                    repository.backupFile(context, uri)
+                }
+            }
             _backupStatus.value = if (result.isSuccess) {
                 BackupStatus.Success(result.getOrNull() ?: "备份完成")
             } else {
@@ -145,6 +198,10 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun getLocalBackupPath(): String = localDocumentManager.getBackupDirPath()
+
+    private fun getFileNameFromUri(uri: Uri): String {
+        return uri.lastPathSegment?.substringAfterLast('/') ?: "unknown_file"
+    }
 }
 
 enum class BackupTarget {
