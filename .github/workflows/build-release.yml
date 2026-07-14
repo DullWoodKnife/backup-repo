@@ -26,6 +26,18 @@ jobs:
         with:
           gradle-version: '8.6'
 
+      - name: Generate signing keystore
+        run: |
+          keytool -genkey -v \
+            -keystore app/release.keystore \
+            -alias release \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass android \
+            -keypass android \
+            -dname "CN=Android"
+
       - name: Build Release APK
         run: gradle assembleRelease
 
