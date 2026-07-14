@@ -71,7 +71,7 @@ class GitHubBackupRepository(
             )
         }
         val base64Content = Base64.encodeToString(bytes, Base64.NO_WRAP)
-        val path = "backups/${createTimestamp()}_${fileName}"
+        val path = "backups/$fileName"
         val url = URL("https://api.github.com/repos/$owner/$repo/contents/$path")
         val connection = url.openConnection() as HttpURLConnection
         connection.requestMethod = "PUT"
