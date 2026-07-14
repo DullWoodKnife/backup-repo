@@ -9,8 +9,9 @@ import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.databackup.data.local.LocalDocumentManager
-import com.example.databackup.BuildConfig
+import com.example.databackup.data.local.DocConverter
 import com.example.databackup.data.local.SCIDocumentFormatter
+import com.example.databackup.data.local.SecureTokenStorage
 import com.example.databackup.data.repository.BackupRepository
 import com.example.databackup.data.repository.GitHubBackupRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,14 +30,28 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     val backupStatus: StateFlow<BackupStatus> = _backupStatus
 
     // GitHub Token 状态（可由 UI 输入更新）
-    private val _githubToken = MutableStateFlow(BuildConfig.GITHUB_TOKEN)
+    private val _githubToken = MutableStateFlow("")
     val githubToken: StateFlow<String> = _githubToken
 
+    // 加密存储
+    private val tokenStorage = SecureTokenStorage(getApplication())
+
+    init {
+        // 启动时从加密存储读取 Token
+        val savedToken = tokenStorage.loadToken()
+        if (savedToken.isNotBlank()) {
+            _githubToken.value = savedToken
+        }
+    }
+
     /**
-     * 更新 GitHub Token（用户从界面输入）
+     * 更新 GitHub Token（用户从界面输入），同时加密保存到本地
      */
     fun updateGitHubToken(token: String) {
         _githubToken.value = token
+        if (token.isNotBlank()) {
+            tokenStorage.saveToken(token)
+        }
     }
 
     private fun getRepositories(): Map<BackupTarget, BackupRepository> {
@@ -93,29 +108,52 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
                             }
                         }
 
-                        // 使用 SCI 格式化器排版
-                        sciFormatter.setConfig(_formatConfig.value)
-                        val formatResult = sciFormatter.formatDocument(tempFile)
-                        if (formatResult.isFailure) {
-                            return@withContext Result.failure<String>(
-                                Exception("SCI 格式化失败: ${formatResult.exceptionOrNull()?.message}")
-                            )
+                        // 根据文件格式选择格式化策略
+                        val fileToUpload: File
+                        val formatMsg: String
+
+                        if (fileName.lowercase().endsWith(".doc")) {
+                            // .doc 旧格式：先转换为 .docx，再格式化
+                            val converter = DocConverter()
+                            val convertResult = converter.convertAndFormat(tempFile, _formatConfig.value)
+                            if (convertResult.isFailure) {
+                                tempFile.delete()
+                                return@withContext Result.failure<String>(
+                                    Exception(".doc 格式化失败: ${convertResult.exceptionOrNull()?.message}")
+                                )
+                            }
+                            fileToUpload = convertResult.getOrNull()!!
+                            tempFile.delete() // 删除原始 .doc 临时文件
+                            formatMsg = ".doc 已转换为 .docx 并按 SCI 标准排版"
+                        } else {
+                            // .docx 格式：直接格式化
+                            sciFormatter.setConfig(_formatConfig.value)
+                            val formatResult = sciFormatter.formatDocument(tempFile)
+                            if (formatResult.isFailure) {
+                                tempFile.delete()
+                                return@withContext Result.failure<String>(
+                                    Exception("SCI 格式化失败: ${formatResult.exceptionOrNull()?.message}")
+                                )
+                            }
+                            fileToUpload = tempFile
+                            formatMsg = formatResult.getOrNull() ?: "格式化完成"
                         }
 
                         // 上传格式化后的文件
                         if (repository is GitHubBackupRepository) {
-                            val uploadResult = repository.uploadFile(tempFile)
+                            val uploadResult = repository.uploadFile(fileToUpload)
                             // 清理缓存文件
-                            tempFile.delete()
+                            fileToUpload.delete()
                             if (uploadResult.isSuccess) {
-                                val formatMsg = formatResult.getOrNull() ?: "格式化完成"
                                 val uploadMsg = uploadResult.getOrNull() ?: "上传完成"
-                                Result.success("$uploadMsg\n\n[SCI 格式化]$formatMsg")
+                                Result.success("$uploadMsg\n\n[SCI 格式化] $formatMsg")
                             } else {
                                 uploadResult
                             }
                         } else {
-                            repository.backupFile(context, Uri.fromFile(tempFile))
+                            val uploadResult = repository.backupFile(context, Uri.fromFile(fileToUpload))
+                            fileToUpload.delete()
+                            uploadResult
                         }
                     } catch (e: Exception) {
                         Result.failure<String>(e)

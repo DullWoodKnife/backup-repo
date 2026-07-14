@@ -74,10 +74,15 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.documentfile)
 
-    // Apache POI for Word document processing
+    // Encrypted SharedPreferences for secure token storage
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Apache POI for Word document processing (.docx)
     implementation("org.apache.poi:poi-ooxml:5.2.5")
     implementation("org.apache.poi:poi-ooxml-lite:5.2.5")
     implementation("org.apache.xmlbeans:xmlbeans:5.2.1")
+    // Apache POI scratchpad for .doc (OLE2 / Word 97-2003) support
+    implementation("org.apache.poi:poi-scratchpad:5.2.5")
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
