@@ -76,10 +76,10 @@ class DocConverter {
                 applyPageSettings(docxDoc, config)
 
                 // 遍历 .doc 段落，提取文本和基本样式
-                val paragraphCount = range.numParagraphs
+                val paragraphCount = range.numParagraphs()
                 for (i in 0 until paragraphCount) {
                     val hwpfParagraph = range.getParagraph(i)
-                    val text = hwpfParagraph.text
+                    val text = hwpfParagraph.text()
 
                     if (text.isBlank()) continue
 
