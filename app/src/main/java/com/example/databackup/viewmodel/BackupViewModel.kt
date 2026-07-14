@@ -27,13 +27,26 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     private val _backupStatus = MutableStateFlow<BackupStatus>(BackupStatus.Idle)
     val backupStatus: StateFlow<BackupStatus> = _backupStatus
 
-    private val repositories = mapOf<BackupTarget, BackupRepository>(
-        BackupTarget.GITHUB to GitHubBackupRepository(
-            owner = "DullWoodKnife",
-            repo = "backup-repo",
-            token = BuildConfig.GITHUB_TOKEN
+    // GitHub Token 状态（可由 UI 输入更新）
+    private val _githubToken = MutableStateFlow(BuildConfig.GITHUB_TOKEN)
+    val githubToken: StateFlow<String> = _githubToken
+
+    /**
+     * 更新 GitHub Token（用户从界面输入）
+     */
+    fun updateGitHubToken(token: String) {
+        _githubToken.value = token
+    }
+
+    private fun getRepositories(): Map<BackupTarget, BackupRepository> {
+        return mapOf<BackupTarget, BackupRepository>(
+            BackupTarget.GITHUB to GitHubBackupRepository(
+                owner = "DullWoodKnife",
+                repo = "backup-doc",
+                token = _githubToken.value
+            )
         )
-    )
+    }
 
     fun onFileSelected(uri: Uri) {
         _selectedFileUri.value = uri
@@ -46,7 +59,11 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
             _backupStatus.value = BackupStatus.Error("请先选择文件")
             return
         }
-        val repository = repositories[target]
+        if (_githubToken.value.isBlank()) {
+            _backupStatus.value = BackupStatus.Error("GitHub Token 为空，请在下方输入")
+            return
+        }
+        val repository = getRepositories()[target]
             ?: run {
                 _backupStatus.value = BackupStatus.Error("未找到对应备份实现")
                 return

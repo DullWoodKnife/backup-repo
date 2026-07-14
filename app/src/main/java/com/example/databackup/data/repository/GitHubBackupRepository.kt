@@ -26,6 +26,9 @@ class GitHubBackupRepository(
     override suspend fun backupFile(context: Context, fileUri: Uri): Result<String> =
         withContext(Dispatchers.IO) {
             try {
+                if (token.isBlank()) {
+                    return@withContext Result.failure(IOException("GitHub Token 为空，请配置有效的 Personal Access Token"))
+                }
                 val resolver = context.contentResolver
                 val inputStream = resolver.openInputStream(fileUri)
                     ?: return@withContext Result.failure(IOException("无法打开文件流"))

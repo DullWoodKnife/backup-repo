@@ -27,6 +27,7 @@ fun BackupHomeScreen(
 ) {
     val selectedUri by viewModel.selectedFileUri.collectAsState()
     val backupStatus by viewModel.backupStatus.collectAsState()
+    val githubToken by viewModel.githubToken.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(backupStatus) {
@@ -113,6 +114,13 @@ fun BackupHomeScreen(
                         Text("重新选择")
                     }
                 }
+
+                // GitHub Token 输入框
+                Spacer(modifier = Modifier.height(20.dp))
+                GitHubTokenInput(
+                    token = githubToken,
+                    onTokenChange = viewModel::updateGitHubToken
+                )
 
                 if (backupStatus is BackupStatus.Loading) {
                     Spacer(modifier = Modifier.height(24.dp))
@@ -244,6 +252,75 @@ private fun LocalFormatCard(
             },
             onDismiss = { showConfigDialog = false }
         )
+    }
+}
+
+/**
+ * GitHub Token 输入组件
+ */
+@Composable
+private fun GitHubTokenInput(
+    token: String,
+    onTokenChange: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var text by remember(token) { mutableStateOf(token) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "GitHub Token",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "收起" else "展开", fontSize = 12.sp)
+                }
+            }
+            if (expanded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Personal Access Token") },
+                    placeholder = { Text("ghp_xxxxxxxxxxxxxxxxxxxx") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Token 用于备份到私有仓库 backup-doc",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { onTokenChange(text) },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("保存 Token")
+                }
+            } else {
+                val status = if (token.isNotBlank()) "已配置 \u2713" else "未配置 \u2717"
+                val color = if (token.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                Text(
+                    text = status,
+                    fontSize = 12.sp,
+                    color = color
+                )
+            }
+        }
     }
 }
 
