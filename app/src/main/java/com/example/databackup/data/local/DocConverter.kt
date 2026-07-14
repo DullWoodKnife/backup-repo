@@ -2,8 +2,6 @@ package com.example.databackup.data.local
 
 import org.apache.poi.hwpf.HWPFDocument
 import org.apache.poi.hwpf.usermodel.Range
-import org.apache.poi.hwpf.usermodel.HWPFParagraph
-import org.apache.poi.hwpf.usermodel.CharacterRun
 import org.apache.poi.xwpf.usermodel.*
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*
 import java.io.File
@@ -80,7 +78,7 @@ class DocConverter {
                 // 遍历 .doc 段落，提取文本和基本样式
                 val paragraphCount = range.numParagraphs
                 for (i in 0 until paragraphCount) {
-                    val hwpfParagraph = range.getParagraph(i) as HWPFParagraph
+                    val hwpfParagraph = range.getParagraph(i)
                     val text = hwpfParagraph.text
 
                     if (text.isBlank()) continue
