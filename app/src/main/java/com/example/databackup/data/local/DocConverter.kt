@@ -2,6 +2,8 @@ package com.example.databackup.data.local
 
 import org.apache.poi.hwpf.HWPFDocument
 import org.apache.poi.hwpf.usermodel.Range
+import org.apache.poi.hwpf.usermodel.HWPFParagraph
+import org.apache.poi.hwpf.usermodel.CharacterRun
 import org.apache.poi.xwpf.usermodel.*
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*
 import java.io.File
@@ -78,7 +80,7 @@ class DocConverter {
                 // 遍历 .doc 段落，提取文本和基本样式
                 val paragraphCount = range.numParagraphs
                 for (i in 0 until paragraphCount) {
-                    val hwpfParagraph = range.getParagraph(i)
+                    val hwpfParagraph = range.getParagraph(i) as HWPFParagraph
                     val text = hwpfParagraph.text
 
                     if (text.isBlank()) continue
@@ -86,10 +88,11 @@ class DocConverter {
                     // 创建 .docx 段落
                     val xwpfParagraph = docxDoc.createParagraph()
 
-                    // 提取 .doc 中的字体/字号信息（如果有）
-                    val runs = hwpfParagraph.characterRuns
-                    if (runs.isNotEmpty()) {
-                        for (run in runs) {
+                    // 提取 .doc 中的字体/字号信息
+                    val numRuns = hwpfParagraph.numCharacterRuns()
+                    if (numRuns > 0) {
+                        for (j in 0 until numRuns) {
+                            val run = hwpfParagraph.getCharacterRun(j)
                             val xwpfRun = xwpfParagraph.createRun()
                             xwpfRun.setText(run.text())
 
