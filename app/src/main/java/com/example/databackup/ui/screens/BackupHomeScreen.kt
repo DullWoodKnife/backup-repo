@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.databackup.data.local.SCIDocumentFormatter
 import com.example.databackup.ui.components.BackupButton
 import com.example.databackup.viewmodel.BackupStatus
 import com.example.databackup.viewmodel.BackupTarget
@@ -133,11 +132,38 @@ fun BackupHomeScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
-                LocalFormatCard(
-                    viewModel = viewModel,
-                    onRequestManageStorage = onRequestManageStorage
-                )
+                // 本地备份目录提示
+                Spacer(modifier = Modifier.height(24.dp))
+                val backupPath = remember { viewModel.getLocalBackupPath() }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "本地备份目录",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = backupPath,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "点击备份时会自动同步仓库文件到此目录",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
 
             Row(
@@ -158,100 +184,6 @@ fun BackupHomeScreen(
                 )
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LocalFormatCard(
-    viewModel: BackupViewModel,
-    onRequestManageStorage: () -> Unit
-) {
-    val needsPermission = remember { viewModel.needsAllFilesPermission() }
-    val backupPath = remember { viewModel.getLocalBackupPath() }
-    val formatConfig by viewModel.formatConfig.collectAsState()
-    var showConfigDialog by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "SCI 论文格式化",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "自动按 SCI 期刊通用投稿格式排版",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "目录: $backupPath",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = buildString {
-                    append("${formatConfig.fontFamily} ${if (formatConfig.lineSpacing == "double") "双倍行距" else formatConfig.lineSpacing}")
-                    append(" \u00b7 ${formatConfig.paperSize}")
-                    append(" \u00b7 ${if (formatConfig.align == "justified") "两端对齐" else "左对齐"}")
-                },
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (needsPermission) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "\u26a0\ufe0f Android 11+ 需开启所有文件访问权限",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = onRequestManageStorage,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("去设置开启权限")
-                    }
-                }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { showConfigDialog = true }) {
-                        Text("配置参数", fontSize = 13.sp)
-                    }
-                    Button(onClick = { viewModel.initAndFormatLocalDocuments() }) {
-                        Text("扫描并格式化论文", fontSize = 13.sp)
-                    }
-                }
-            }
-        }
-    }
-
-    if (showConfigDialog) {
-        FormatConfigDialog(
-            currentConfig = formatConfig,
-            onConfirm = { newConfig ->
-                viewModel.updateFormatConfig(newConfig)
-                showConfigDialog = false
-            },
-            onDismiss = { showConfigDialog = false }
-        )
     }
 }
 
@@ -300,7 +232,7 @@ private fun GitHubTokenInput(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Token 用于备份到私有仓库 backup-doc",
+                    text = "Token 将加密保存在本地，用于备份到私有仓库 backup-doc",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -322,125 +254,4 @@ private fun GitHubTokenInput(
             }
         }
     }
-}
-
-@Composable
-private fun FormatConfigDialog(
-    currentConfig: SCIDocumentFormatter.FormatConfig,
-    onConfirm: (SCIDocumentFormatter.FormatConfig) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var paperSize by remember { mutableStateOf(currentConfig.paperSize) }
-    var lineSpacing by remember { mutableStateOf(currentConfig.lineSpacing) }
-    var fontFamily by remember { mutableStateOf(currentConfig.fontFamily) }
-    var align by remember { mutableStateOf(currentConfig.align) }
-    var enableTitlePage by remember { mutableStateOf(currentConfig.enableTitlePage) }
-    var enableAbstract by remember { mutableStateOf(currentConfig.enableAbstract) }
-    var enableKeywords by remember { mutableStateOf(currentConfig.enableKeywords) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("SCI 论文格式配置") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text("纸张大小", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = paperSize == "A4",
-                        onClick = { paperSize = "A4" },
-                        label = { Text("A4") }
-                    )
-                    FilterChip(
-                        selected = paperSize == "Letter",
-                        onClick = { paperSize = "Letter" },
-                        label = { Text("Letter") }
-                    )
-                }
-                Text("字体", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = fontFamily == "Times New Roman",
-                        onClick = { fontFamily = "Times New Roman" },
-                        label = { Text("Times New Roman") }
-                    )
-                    FilterChip(
-                        selected = fontFamily == "Arial",
-                        onClick = { fontFamily = "Arial" },
-                        label = { Text("Arial") }
-                    )
-                }
-                Text("行距", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = lineSpacing == "double",
-                        onClick = { lineSpacing = "double" },
-                        label = { Text("双倍") }
-                    )
-                    FilterChip(
-                        selected = lineSpacing == "1.5",
-                        onClick = { lineSpacing = "1.5" },
-                        label = { Text("1.5倍") }
-                    )
-                    FilterChip(
-                        selected = lineSpacing == "single",
-                        onClick = { lineSpacing = "single" },
-                        label = { Text("单倍") }
-                    )
-                }
-                Text("对齐方式", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = align == "justified",
-                        onClick = { align = "justified" },
-                        label = { Text("两端对齐") }
-                    )
-                    FilterChip(
-                        selected = align == "left",
-                        onClick = { align = "left" },
-                        label = { Text("左对齐") }
-                    )
-                }
-                HorizontalDivider()
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = enableTitlePage, onCheckedChange = { enableTitlePage = it })
-                    Text("启用标题页格式化（Title/Authors）")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = enableAbstract, onCheckedChange = { enableAbstract = it })
-                    Text("启用 Abstract 段落识别")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = enableKeywords, onCheckedChange = { enableKeywords = it })
-                    Text("启用 Keywords 段落识别")
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                onConfirm(
-                    SCIDocumentFormatter.FormatConfig(
-                        paperSize = paperSize,
-                        lineSpacing = lineSpacing,
-                        fontFamily = fontFamily,
-                        align = align,
-                        enableTitlePage = enableTitlePage,
-                        enableAbstract = enableAbstract,
-                        enableKeywords = enableKeywords
-                    )
-                )
-            }) {
-                Text("确定")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
 }

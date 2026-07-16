@@ -8,9 +8,7 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.databackup.data.local.LocalDocumentManager
-import com.example.databackup.data.local.DocConverter
-import com.example.databackup.data.local.SCIDocumentFormatter
+import com.example.databackup.data.local.GitHubPullManager
 import com.example.databackup.data.local.SecureTokenStorage
 import com.example.databackup.data.repository.BackupRepository
 import com.example.databackup.data.repository.GitHubBackupRepository
@@ -37,7 +35,6 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     private val tokenStorage = SecureTokenStorage(getApplication())
 
     init {
-        // 启动时从加密存储读取 Token
         val savedToken = tokenStorage.loadToken()
         if (savedToken.isNotBlank()) {
             _githubToken.value = savedToken
@@ -69,6 +66,11 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
         _backupStatus.value = BackupStatus.FileSelected(uri.toString())
     }
 
+    /**
+     * 执行备份流程：
+     * 1. git pull：先下载仓库 backups/ 目录内容到 /sdcard/backuptool
+     * 2. 上传：将选中的文件上传到 GitHub
+     */
     fun performBackup(target: BackupTarget) {
         val uri = _selectedFileUri.value
         if (uri == null) {
@@ -84,83 +86,32 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
                 _backupStatus.value = BackupStatus.Error("未找到对应备份实现")
                 return
             }
-        _backupStatus.value = BackupStatus.Loading("${repository.getRepositoryName()} · 预处理")
+
+        _backupStatus.value = BackupStatus.Loading("${repository.getRepositoryName()} · 同步中")
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 val context = getApplication<Application>()
-                val resolver = context.contentResolver
-                val fileName = getFileNameFromUri(uri)
 
-                // 判断是否为 Word 文件，是的话先格式化再上传
-                val isWordFile = fileName.lowercase().endsWith(".docx") ||
-                                 fileName.lowercase().endsWith(".doc")
+                // ===== 第 1 步：git pull（下载仓库文件到本地） =====
+                val pullManager = GitHubPullManager(
+                    owner = "DullWoodKnife",
+                    repo = "backup-doc",
+                    token = _githubToken.value
+                )
+                val pullResult = pullManager.pullBackups()
+                val pullMsg = if (pullResult.isSuccess) pullResult.getOrNull() ?: "同步完成" else "同步失败: ${pullResult.exceptionOrNull()?.message}"
 
-                if (isWordFile) {
-                    try {
-                        // 将 URI 文件复制到应用缓存目录
-                        val inputStream = resolver.openInputStream(uri)
-                            ?: return@withContext Result.failure<String>(Exception("无法打开文件流"))
-                        val cacheDir = context.cacheDir
-                        val tempFile = File(cacheDir, "sci_format_${System.currentTimeMillis()}_$fileName")
-                        inputStream.use { input ->
-                            tempFile.outputStream().use { output ->
-                                input.copyTo(output)
-                            }
-                        }
+                // ===== 第 2 步：上传文件 =====
+                val uploadResult = repository.backupFile(context, uri)
 
-                        // 根据文件格式选择格式化策略
-                        val fileToUpload: File
-                        val formatMsg: String
-
-                        if (fileName.lowercase().endsWith(".doc")) {
-                            // .doc 旧格式：先转换为 .docx，再格式化
-                            val converter = DocConverter()
-                            val convertResult = converter.convertAndFormat(tempFile, _formatConfig.value)
-                            if (convertResult.isFailure) {
-                                tempFile.delete()
-                                return@withContext Result.failure<String>(
-                                    Exception(".doc 格式化失败: ${convertResult.exceptionOrNull()?.message}")
-                                )
-                            }
-                            fileToUpload = convertResult.getOrNull()!!
-                            tempFile.delete() // 删除原始 .doc 临时文件
-                            formatMsg = ".doc 已转换为 .docx 并按 SCI 标准排版"
-                        } else {
-                            // .docx 格式：直接格式化
-                            sciFormatter.setConfig(_formatConfig.value)
-                            val formatResult = sciFormatter.formatDocument(tempFile)
-                            if (formatResult.isFailure) {
-                                tempFile.delete()
-                                return@withContext Result.failure<String>(
-                                    Exception("SCI 格式化失败: ${formatResult.exceptionOrNull()?.message}")
-                                )
-                            }
-                            fileToUpload = tempFile
-                            formatMsg = formatResult.getOrNull() ?: "格式化完成"
-                        }
-
-                        // 上传格式化后的文件
-                        if (repository is GitHubBackupRepository) {
-                            val uploadResult = repository.uploadFile(fileToUpload)
-                            // 清理缓存文件
-                            fileToUpload.delete()
-                            if (uploadResult.isSuccess) {
-                                val uploadMsg = uploadResult.getOrNull() ?: "上传完成"
-                                Result.success("$uploadMsg\n\n[SCI 格式化] $formatMsg")
-                            } else {
-                                uploadResult
-                            }
-                        } else {
-                            val uploadResult = repository.backupFile(context, Uri.fromFile(fileToUpload))
-                            fileToUpload.delete()
-                            uploadResult
-                        }
-                    } catch (e: Exception) {
-                        Result.failure<String>(e)
-                    }
+                // 合并 pull 和 upload 的结果
+                if (uploadResult.isSuccess) {
+                    val uploadMsg = uploadResult.getOrNull() ?: "上传完成"
+                    Result.success("$uploadMsg\n\n[本地同步] $pullMsg")
                 } else {
-                    // 非 Word 文件，直接上传
-                    repository.backupFile(context, uri)
+                    Result.failure<String>(
+                        Exception("上传失败: ${uploadResult.exceptionOrNull()?.message}\n同步结果: $pullMsg")
+                    )
                 }
             }
             _backupStatus.value = if (result.isSuccess) {
@@ -175,17 +126,6 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
         _backupStatus.value = BackupStatus.Idle
     }
 
-    private val localDocumentManager = LocalDocumentManager()
-    private val sciFormatter = SCIDocumentFormatter()
-
-    private val _formatConfig = MutableStateFlow(SCIDocumentFormatter.FormatConfig())
-    val formatConfig: StateFlow<SCIDocumentFormatter.FormatConfig> = _formatConfig
-
-    fun updateFormatConfig(config: SCIDocumentFormatter.FormatConfig) {
-        _formatConfig.value = config
-        sciFormatter.setConfig(config)
-    }
-
     fun needsAllFilesPermission(): Boolean {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
                 !Environment.isExternalStorageManager()
@@ -195,48 +135,10 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
         return Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
     }
 
-    fun initAndFormatLocalDocuments() {
-        viewModelScope.launch {
-            _backupStatus.value = BackupStatus.Loading("SCI论文格式化")
-            sciFormatter.setConfig(_formatConfig.value)
-            val result = withContext(Dispatchers.IO) {
-                try {
-                    val dirCreated = localDocumentManager.ensureBackupDirectoryExists()
-                    if (!dirCreated) {
-                        return@withContext Result.failure<String>(
-                            Exception("无法创建目录 ${localDocumentManager.getBackupDirPath()}，请检查存储权限")
-                        )
-                    }
-                    val wordFiles = localDocumentManager.scanWordFiles()
-                    if (wordFiles.isEmpty()) {
-                        return@withContext Result.success(
-                            "目录已准备就绪：${localDocumentManager.getBackupDirPath()}\n" +
-                            "未找到 Word 文件（.docx / .doc），请将文件放入该目录后重试"
-                        )
-                    }
-                    val results = mutableListOf<String>()
-                    results.add("找到 ${wordFiles.size} 个 Word 文件，开始 SCI 格式化...")
-                    for (file in wordFiles) {
-                        val formatResult = sciFormatter.formatDocument(file)
-                        results.add(
-                            if (formatResult.isSuccess) formatResult.getOrNull()!!
-                            else "❌ ${file.name}: ${formatResult.exceptionOrNull()?.message}"
-                        )
-                    }
-                    Result.success(results.joinToString("\n"))
-                } catch (e: Exception) {
-                    Result.failure<String>(e)
-                }
-            }
-            _backupStatus.value = if (result.isSuccess) {
-                BackupStatus.Success(result.getOrNull() ?: "格式化完成")
-            } else {
-                BackupStatus.Error(result.exceptionOrNull()?.message ?: "格式化失败")
-            }
-        }
+    fun getLocalBackupPath(): String {
+        val sdcard = Environment.getExternalStorageDirectory()
+        return File(sdcard, "backuptool").absolutePath
     }
-
-    fun getLocalBackupPath(): String = localDocumentManager.getBackupDirPath()
 
     private fun getFileNameFromUri(uri: Uri): String {
         return uri.lastPathSegment?.substringAfterLast('/') ?: "unknown_file"

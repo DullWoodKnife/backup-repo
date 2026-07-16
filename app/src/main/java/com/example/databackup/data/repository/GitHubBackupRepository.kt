@@ -81,8 +81,25 @@ class GitHubBackupRepository(
         connection.doOutput = true
         connection.connectTimeout = 30000
         connection.readTimeout = 60000
+
+        // 自动生成详细的 commit message
+        val sizeKB = bytes.size / 1024
+        val sizeStr = if (sizeKB < 1024) "${sizeKB}KB" else "${sizeKB / 1024}MB"
+        val timestamp = createTimestamp()
+        val commitMessage = buildString {
+            append("[DataBackup] Upload $fileName")
+            append("\n\n")
+            append("- File: $fileName")
+            append("\n")
+            append("- Size: $sizeStr")
+            append("\n")
+            append("- Time: $timestamp")
+            append("\n")
+            append("- Device: Android via DataBackup App")
+        }
+
         val jsonBody = JSONObject().apply {
-            put("message", "Backup: $fileName")
+            put("message", commitMessage)
             put("content", base64Content)
             put("branch", branch)
         }
