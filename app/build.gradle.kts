@@ -1,7 +1,18 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
 }
+
+// 读取版本号配置
+val versionPropsFile = file("${rootDir}/version.properties")
+val versionProps = Properties()
+if (versionPropsFile.exists()) {
+    versionProps.load(versionPropsFile.inputStream())
+}
+val versionName = versionProps.getProperty("VERSION_NAME", "1.0.0")
+val versionCode = versionProps.getProperty("VERSION_CODE", "1").toInt()
 
 android {
     namespace = "com.example.databackup"
@@ -11,8 +22,8 @@ android {
         applicationId = "com.example.databackup"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.3"
+        versionCode = versionCode
+        versionName = versionName
         // GitHub Token: 从环境变量或 local.properties 读取，避免硬编码在源码中
         val githubToken = providers.gradleProperty("GITHUB_TOKEN").orNull
             ?: System.getenv("GITHUB_TOKEN")
@@ -59,6 +70,37 @@ android {
 
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.10"
+    }
+}
+
+// 版本号自动递增任务
+tasks.register("incrementVersion") {
+    group = "versioning"
+    description = "递增版本号（versionCode 和 versionName 最后一位各 +1）"
+    doLast {
+        val props = Properties()
+        if (versionPropsFile.exists()) {
+            props.load(versionPropsFile.inputStream())
+        }
+        val currentCode = props.getProperty("VERSION_CODE", "1").toInt()
+        val currentName = props.getProperty("VERSION_NAME", "1.0.0")
+
+        // 递增 versionCode
+        val newCode = currentCode + 1
+        props.setProperty("VERSION_CODE", newCode.toString())
+
+        // 递增 versionName 最后一位
+        val nameParts = currentName.split(".")
+        val newPatch = if (nameParts.size >= 3) nameParts[2].toInt() + 1 else 1
+        val newName = if (nameParts.size >= 2) {
+            "${nameParts[0]}.${nameParts[1]}.$newPatch"
+        } else {
+            "1.0.$newPatch"
+        }
+        props.setProperty("VERSION_NAME", newName)
+
+        versionPropsFile.writer().use { props.store(it, "Version configuration") }
+        println("版本号已更新: $currentName ($currentCode) -> $newName ($newCode)")
     }
 }
 
