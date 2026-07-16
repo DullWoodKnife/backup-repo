@@ -12,7 +12,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0.2"
+        versionName = "1.0.3"
         // GitHub Token: 从环境变量或 local.properties 读取，避免硬编码在源码中
         val githubToken = providers.gradleProperty("GITHUB_TOKEN").orNull
             ?: System.getenv("GITHUB_TOKEN")

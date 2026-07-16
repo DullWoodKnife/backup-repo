@@ -26,6 +26,7 @@ fun BackupHomeScreen(
 ) {
     val selectedUri by viewModel.selectedFileUri.collectAsState()
     val selectedFileName by viewModel.selectedFileName.collectAsState()
+    val selectedFilePath by viewModel.selectedFilePath.collectAsState()
     val backupStatus by viewModel.backupStatus.collectAsState()
     val githubToken by viewModel.githubToken.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -112,7 +113,7 @@ fun BackupHomeScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = selectedUri.toString(),
+                        text = selectedFilePath,
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

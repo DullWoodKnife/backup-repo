@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 class BackupViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -26,6 +28,9 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _selectedFileName = MutableStateFlow("")
     val selectedFileName: StateFlow<String> = _selectedFileName
+
+    private val _selectedFilePath = MutableStateFlow("")
+    val selectedFilePath: StateFlow<String> = _selectedFilePath
 
     private val _backupStatus = MutableStateFlow<BackupStatus>(BackupStatus.Idle)
     val backupStatus: StateFlow<BackupStatus> = _backupStatus
@@ -67,7 +72,30 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     fun onFileSelected(uri: Uri, displayName: String = "") {
         _selectedFileUri.value = uri
         _selectedFileName.value = displayName
+        // 对 URI 进行 URL 解码，将 %E6%88%91 等编码还原为中文
+        _selectedFilePath.value = decodeUriPath(uri)
         _backupStatus.value = BackupStatus.FileSelected(displayName)
+    }
+
+    /**
+     * 将 content:// URI 解码为可读路径
+     * 例如: content://.../primary%3ADownload%2F%E6%88%91%E7%9A%84 → Download/我的资源/文件.doc
+     */
+    private fun decodeUriPath(uri: Uri): String {
+        return try {
+            val raw = uri.toString()
+            val decoded = URLDecoder.decode(raw, StandardCharsets.UTF_8.name())
+            // 从 content URI 中提取实际文件路径部分
+            // content://com.android.externalstorage.documents/document/primary:Download/我的资源/文件.doc
+            val colonIndex = decoded.indexOf("primary:")
+            if (colonIndex >= 0) {
+                decoded.substring(colonIndex + 8) // 去掉 "primary:" 前缀
+            } else {
+                decoded
+            }
+        } catch (e: Exception) {
+            uri.toString()
+        }
     }
 
     /**
