@@ -11,8 +11,8 @@ val versionProps = Properties()
 if (versionPropsFile.exists()) {
     versionProps.load(versionPropsFile.inputStream())
 }
-val versionName = versionProps.getProperty("VERSION_NAME", "1.0.0")
-val versionCode = versionProps.getProperty("VERSION_CODE", "1").toInt()
+val appVersionName = versionProps.getProperty("VERSION_NAME", "1.0.0")
+val appVersionCode = versionProps.getProperty("VERSION_CODE", "1").toInt()
 
 android {
     namespace = "com.example.databackup"
@@ -22,8 +22,8 @@ android {
         applicationId = "com.example.databackup"
         minSdk = 26
         targetSdk = 35
-        versionCode = versionCode
-        versionName = versionName
+        versionCode = appVersionCode
+        versionName = appVersionName
         // GitHub Token: 从环境变量或 local.properties 读取，避免硬编码在源码中
         val githubToken = providers.gradleProperty("GITHUB_TOKEN").orNull
             ?: System.getenv("GITHUB_TOKEN")
