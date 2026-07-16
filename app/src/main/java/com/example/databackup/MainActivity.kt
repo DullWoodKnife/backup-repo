@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -61,8 +62,27 @@ class MainActivity : ComponentActivity() {
                 it,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
-            viewModel.onFileSelected(it)
+            // 通过 ContentResolver 获取原始文件名（中文不会 URL 编码）
+            val displayName = getDisplayName(it)
+            viewModel.onFileSelected(it, displayName)
         }
+    }
+
+    /**
+     * 从 URI 解析原始文件名（支持中文，不会乱码）
+     * 优先使用 ContentResolver 查询 DISPLAY_NAME，失败则回退到路径截取
+     */
+    private fun getDisplayName(uri: Uri): String {
+        var name: String? = null
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex >= 0) {
+                    name = cursor.getString(nameIndex)
+                }
+            }
+        }
+        return name ?: uri.lastPathSegment?.substringAfterLast('/') ?: "未知文件"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

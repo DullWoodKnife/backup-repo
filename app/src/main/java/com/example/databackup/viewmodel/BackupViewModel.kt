@@ -24,6 +24,9 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedFileUri = MutableStateFlow<Uri?>(null)
     val selectedFileUri: StateFlow<Uri?> = _selectedFileUri
 
+    private val _selectedFileName = MutableStateFlow("")
+    val selectedFileName: StateFlow<String> = _selectedFileName
+
     private val _backupStatus = MutableStateFlow<BackupStatus>(BackupStatus.Idle)
     val backupStatus: StateFlow<BackupStatus> = _backupStatus
 
@@ -61,9 +64,10 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
-    fun onFileSelected(uri: Uri) {
+    fun onFileSelected(uri: Uri, displayName: String = "") {
         _selectedFileUri.value = uri
-        _backupStatus.value = BackupStatus.FileSelected(uri.toString())
+        _selectedFileName.value = displayName
+        _backupStatus.value = BackupStatus.FileSelected(displayName)
     }
 
     /**
